@@ -249,12 +249,6 @@
 	   	&.listHier td:empty{
    			padding: 0;
    		}
-		
-		@media #{$phone}{
-                        overflow-x: auto;
-			display:block;
-                }
-
 	}
 	
 	#samLiteEntryForm\:data{
