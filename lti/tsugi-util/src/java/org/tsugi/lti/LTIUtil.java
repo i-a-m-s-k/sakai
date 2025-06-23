@@ -75,10 +75,10 @@ import org.json.simple.JSONValue;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
-/* Leave out until we have JTidy 0.8 in the repository
- import org.w3c.tidy.Tidy;
- import java.io.ByteArrayOutputStream;
- */
+
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import org.tsugi.lti.objects.LTIDescriptor;
 
 /**
  * Some Utility code for IMS LTI
@@ -954,6 +954,181 @@ public class LTIUtil {
 			postProp.put(key, value);
 		}
 		return true;
+	}
+
+	/**
+	 * Parse LTI descriptor using Jackson-based LTIDescriptor object.
+	 * 
+	 * @param launch_info Variable is mutated by this method.
+	 * @param postProp Variable is mutated by this method.
+	 * @param descriptor The XML descriptor string to parse
+	 * @return true if parsing was successful, false otherwise
+	 */
+	public static boolean parseDescriptorJackson(Map<String, String> launch_info,
+			Map<String, String> postProp, String descriptor) {
+		
+		if (descriptor == null || descriptor.trim().isEmpty()) {
+			log.warn("Descriptor is null or empty in parseDescriptorJackson");
+			return false;
+		}
+
+		try {
+			XmlMapper mapper = new XmlMapper();
+			mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+			mapper.setDefaultUseWrapper(false);
+
+			LTIDescriptor ltiDescriptor = mapper.readValue(descriptor.trim(), LTIDescriptor.class);
+			
+			if (ltiDescriptor == null) {
+				log.warn("Failed to parse LTI descriptor with Jackson");
+				return false;
+			}
+			String launchUrl = StringUtils.trimToNull(ltiDescriptor.getLaunchUrl());
+			String secureLaunchUrl = StringUtils.trimToNull(ltiDescriptor.getSecureLaunchUrl());
+			
+			if (launchUrl == null && secureLaunchUrl == null) {
+				log.warn("No launch URL found in descriptor");
+				return false;
+			}
+
+			setProperty(launch_info, "launch_url", launchUrl);
+			setProperty(launch_info, "secure_launch_url", secureLaunchUrl);
+
+			if (ltiDescriptor.getCustom() != null && ltiDescriptor.getCustom().getParameters() != null) {
+				for (LTIDescriptor.Parameter param : ltiDescriptor.getCustom().getParameters()) {
+					if (param.getKey() != null && param.getValue() != null) {
+						String key = "custom_" + mapKeyName(param.getKey());
+						log.debug("key={} val={}", key, param.getValue());
+						postProp.put(key, param.getValue());
+					}
+				}
+			}
+
+			if (ltiDescriptor.getExtensions() != null) {
+				for (LTIDescriptor.Extension extension : ltiDescriptor.getExtensions()) {
+					if (extension.getParameters() != null) {
+						for (LTIDescriptor.Parameter param : extension.getParameters()) {
+							if (param.getKey() != null && param.getValue() != null) {
+								String key = "custom_" + mapKeyName(param.getKey());
+								log.debug("extension key={} val={}", key, param.getValue());
+								postProp.put(key, param.getValue());
+							}
+						}
+					}
+				}
+			}
+
+			if (ltiDescriptor.getVendor() != null) {
+				setProperty(launch_info, "vendor_code", ltiDescriptor.getVendor().getCode());
+				setProperty(launch_info, "vendor_name", ltiDescriptor.getVendor().getName());
+				setProperty(launch_info, "vendor_description", ltiDescriptor.getVendor().getDescription());
+				setProperty(launch_info, "vendor_url", ltiDescriptor.getVendor().getUrl());
+				
+				if (ltiDescriptor.getVendor().getContact() != null) {
+					setProperty(launch_info, "vendor_contact_email", ltiDescriptor.getVendor().getContact().getEmail());
+				}
+			}
+
+			setProperty(launch_info, "title", ltiDescriptor.getTitle());
+			setProperty(launch_info, "description", ltiDescriptor.getDescription());
+			setProperty(launch_info, "icon", ltiDescriptor.getIcon());
+			setProperty(launch_info, "secure_icon", ltiDescriptor.getSecureIcon());
+
+			log.debug("Successfully parsed LTI descriptor with Jackson");
+			return true;
+
+		} catch (Exception e) {
+			log.warn("LTIUtil exception parsing LTI descriptor with Jackson: {}", e.getMessage(), e);
+			return false;
+		}
+	}
+
+	/**
+	 * Validate LTI descriptor using Jackson-based LTIDescriptor object.
+	 *
+	 * @param descriptor The XML descriptor string to validate
+	 * @return The launch URL if valid, null otherwise
+	 */
+	public static String validateDescriptorJackson(String descriptor) {
+		if (descriptor == null || descriptor.trim().isEmpty()) {
+			return null;
+		}
+		
+		if (descriptor.indexOf("<basic_lti_link") < 0) {
+			return null;
+		}
+
+		try {
+			XmlMapper mapper = new XmlMapper();
+			mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+			
+			LTIDescriptor ltiDescriptor = mapper.readValue(descriptor.trim(), LTIDescriptor.class);
+			
+			if (ltiDescriptor == null) {
+				return null;
+			}
+
+			String secureLaunchUrl = StringUtils.trimToNull(ltiDescriptor.getSecureLaunchUrl());
+			if (secureLaunchUrl != null && !secureLaunchUrl.isEmpty()) {
+				return secureLaunchUrl;
+			}
+
+			String launchUrl = StringUtils.trimToNull(ltiDescriptor.getLaunchUrl());
+			if (launchUrl != null && !launchUrl.isEmpty()) {
+				return launchUrl;
+			}
+
+			return null;
+
+		} catch (Exception e) {
+			log.warn("LTIUtil exception validating LTI descriptor with Jackson: {}", e.getMessage(), e);
+			return null;
+		}
+	}
+
+	/**
+	 * Prepare LTI descriptor for export using Jackson-based LTIDescriptor object.
+	 * This removes sensitive information like keys and secrets.
+	 *
+	 * @param descriptor The XML descriptor string to prepare for export
+	 * @return The cleaned descriptor XML, or null if parsing failed
+	 */
+	public static String prepareForExportJackson(String descriptor) {
+		if (descriptor == null || descriptor.trim().isEmpty()) {
+			return null;
+		}
+
+		try {
+			XmlMapper mapper = new XmlMapper();
+			mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+			
+			LTIDescriptor ltiDescriptor = mapper.readValue(descriptor.trim(), LTIDescriptor.class);
+			
+			if (ltiDescriptor == null) {
+				log.warn("Unable to parse XML in prepareForExportJackson");
+				return null;
+			}
+
+			LTIDescriptor cleanDescriptor = new LTIDescriptor();
+			
+			cleanDescriptor.setTitle(ltiDescriptor.getTitle());
+			cleanDescriptor.setDescription(ltiDescriptor.getDescription());
+			cleanDescriptor.setLaunchUrl(ltiDescriptor.getLaunchUrl());
+			cleanDescriptor.setSecureLaunchUrl(ltiDescriptor.getSecureLaunchUrl());
+			cleanDescriptor.setIcon(ltiDescriptor.getIcon());
+			cleanDescriptor.setSecureIcon(ltiDescriptor.getSecureIcon());
+			cleanDescriptor.setCartridgeIcon(ltiDescriptor.getCartridgeIcon());
+			cleanDescriptor.setVendor(ltiDescriptor.getVendor());
+			cleanDescriptor.setCustom(ltiDescriptor.getCustom());
+			cleanDescriptor.setExtensions(ltiDescriptor.getExtensions());
+
+			String cleanXml = mapper.writeValueAsString(cleanDescriptor);
+			return cleanXml;
+
+		} catch (Exception e) {
+			log.warn("LTIUtil exception preparing LTI descriptor for export with Jackson: {}", e.getMessage(), e);
+			return null;
+		}
 	}
 
 	// Remove fields that should not be exported
