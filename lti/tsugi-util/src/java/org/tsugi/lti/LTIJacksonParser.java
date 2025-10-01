@@ -5,6 +5,8 @@ import org.apache.commons.lang3.StringUtils;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import org.tsugi.lti.objects.LTIDescriptor;
+import org.tsugi.lti.objects.Parameter;
+import org.tsugi.lti.objects.Extension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +59,7 @@ public class LTIJacksonParser {
             setProperty(launch_info, "secure_launch_url", secureLaunchUrl);
 
             if (ltiDescriptor.getCustom() != null && ltiDescriptor.getCustom().getParameters() != null) {
-                for (LTIDescriptor.Parameter param : ltiDescriptor.getCustom().getParameters()) {
+                for (Parameter param : ltiDescriptor.getCustom().getParameters()) {
                     if (param.getKey() != null && param.getValue() != null) {
                         String key = "custom_" + mapKeyName(param.getKey());
                         log.debug("key={} val={}", key, param.getValue());
@@ -67,9 +69,9 @@ public class LTIJacksonParser {
             }
 
             if (ltiDescriptor.getExtensions() != null) {
-                for (LTIDescriptor.Extension extension : ltiDescriptor.getExtensions()) {
+                for (Extension extension : ltiDescriptor.getExtensions()) {
                     if (extension.getParameters() != null) {
-                        for (LTIDescriptor.Parameter param : extension.getParameters()) {
+                        for (Parameter param : extension.getParameters()) {
                             if (param.getKey() != null && param.getValue() != null) {
                                 String key = "custom_" + mapKeyName(param.getKey());
                                 log.debug("extension key={} val={}", key, param.getValue());

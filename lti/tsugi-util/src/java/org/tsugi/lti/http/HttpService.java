@@ -2,7 +2,7 @@ package org.tsugi.lti.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.tsugi.lti.oauth.OAuthMessage;
+import net.oauth.OAuthMessage;
 import org.tsugi.lti.oauth.OAuthService;
 
 import javax.servlet.http.HttpServletRequest;
@@ -99,7 +99,14 @@ public class HttpService {
     public HttpURLConnection sendOAuthRequest(String method, String url, 
                                             String oauthKey, String oauthSecret) throws IOException {
         OAuthMessage oauthMessage = oauthService.signProperties(new HashMap<>(), url, method, oauthKey, oauthSecret);
-        return sendRequest(method, url, oauthMessage.getParameters());
+        
+        // Convert List<Map.Entry<String, String>> to Map<String, String>
+        Map<String, String> parameters = new HashMap<>();
+        for (Map.Entry<String, String> entry : oauthMessage.getParameters()) {
+            parameters.put(entry.getKey(), entry.getValue());
+        }
+        
+        return sendRequest(method, url, parameters);
     }
 
     public HttpURLConnection sendRequest(String method, String url, Map<String, String> parameters) throws IOException {

@@ -994,8 +994,8 @@ public class LTIUtil {
 			setProperty(launch_info, "launch_url", launchUrl);
 			setProperty(launch_info, "secure_launch_url", secureLaunchUrl);
 
-			if (ltiDescriptor.getCustom() != null && ltiDescriptor.getCustom().getParameters() != null) {
-				for (LTIDescriptor.Parameter param : ltiDescriptor.getCustom().getParameters()) {
+            if (ltiDescriptor.getCustom() != null && ltiDescriptor.getCustom().getParameters() != null) {
+                for (org.tsugi.lti.objects.Parameter param : ltiDescriptor.getCustom().getParameters()) {
 					if (param.getKey() != null && param.getValue() != null) {
 						String key = "custom_" + mapKeyName(param.getKey());
 						log.debug("key={} val={}", key, param.getValue());
@@ -1004,10 +1004,10 @@ public class LTIUtil {
 				}
 			}
 
-			if (ltiDescriptor.getExtensions() != null) {
-				for (LTIDescriptor.Extension extension : ltiDescriptor.getExtensions()) {
+            if (ltiDescriptor.getExtensions() != null) {
+                for (org.tsugi.lti.objects.Extension extension : ltiDescriptor.getExtensions()) {
 					if (extension.getParameters() != null) {
-						for (LTIDescriptor.Parameter param : extension.getParameters()) {
+                        for (org.tsugi.lti.objects.Parameter param : extension.getParameters()) {
 							if (param.getKey() != null && param.getValue() != null) {
 								String key = "custom_" + mapKeyName(param.getKey());
 								log.debug("extension key={} val={}", key, param.getValue());
