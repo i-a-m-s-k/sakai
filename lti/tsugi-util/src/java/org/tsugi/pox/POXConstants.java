@@ -32,7 +32,7 @@ public class POXConstants {
     public static final String MINOR_IDALLOC = "idalloc";
     public static final String MINOR_OVERFLOWFAIL = "overflowfail";
     public static final String MINOR_IDALLOCINUSEFAIL = "idallocinusefail";
-    public static final String MINOR_INVALIDDATAFAIL = "invaliddata";
+    public static final String MINOR_INVALIDDATA = "invaliddata";
     public static final String MINOR_INCOMPLETEDATA = "incompletedata";
     public static final String MINOR_PARTIALSTORAGE = "partialdatastorage";
     public static final String MINOR_UNKNOWNOBJECT = "unknownobject";
@@ -50,7 +50,7 @@ public class POXConstants {
     
     public static final List<String> VALID_MINOR = Collections.unmodifiableList(Arrays.asList(
         MINOR_FULLSUCCESS, MINOR_NOSOURCEDIDS, MINOR_IDALLOC, MINOR_OVERFLOWFAIL,
-        MINOR_IDALLOCINUSEFAIL, MINOR_INVALIDDATAFAIL, MINOR_INCOMPLETEDATA,
+        MINOR_IDALLOCINUSEFAIL, MINOR_INVALIDDATA, MINOR_INCOMPLETEDATA,
         MINOR_PARTIALSTORAGE, MINOR_UNKNOWNOBJECT, MINOR_DELETEFAILURE,
         MINOR_TARGETREADFAILURE, MINOR_SAVEPOINTERROR, MINOR_SAVEPOINTSYNCERROR,
         MINOR_UNKNOWNQUERY, MINOR_UNKNOWNVOCAB, MINOR_TARGETISBUSY,
@@ -61,11 +61,10 @@ public class POXConstants {
     public static final String OPERATION_REPLACE_RESULT = "replaceResultRequest";
     public static final String OPERATION_READ_RESULT = "readResultRequest";
     public static final String OPERATION_DELETE_RESULT = "deleteResultRequest";
-    public static final String OPERATION_READ_MEMBERSHIP = "readMembershipRequest";
     
     public static final List<String> VALID_OPERATIONS = Collections.unmodifiableList(Arrays.asList(
         OPERATION_REPLACE_RESULT, OPERATION_READ_RESULT, 
-        OPERATION_DELETE_RESULT, OPERATION_READ_MEMBERSHIP
+        OPERATION_DELETE_RESULT
     ));
     
     public static final String ROLE_LEARNER = "Learner";

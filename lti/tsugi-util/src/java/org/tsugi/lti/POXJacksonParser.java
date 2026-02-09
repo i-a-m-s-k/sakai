@@ -11,51 +11,41 @@ import org.tsugi.pox.POXConstants;
 import org.tsugi.pox.POXResponseBuilder;
 import org.tsugi.pox.POXResponseFactory;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import javax.xml.stream.XMLInputFactory;
 
 public class POXJacksonParser {
     
     private static final Logger log = LoggerFactory.getLogger(POXJacksonParser.class);
     
-    private static final XmlMapper XML_MAPPER;
+    /**
+     * Shared thread-safe XmlMapper instance for POX operations.
+     * Configured for both serialization and deserialization with XXE protection.
+     * This mapper can be safely reused across all POX-related classes.
+     */
+    public static final XmlMapper XML_MAPPER;
     
     static {
         XML_MAPPER = new XmlMapper();
+        // Deserialization configuration
         XML_MAPPER.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         XML_MAPPER.setDefaultUseWrapper(false);
+        
+        // Serialization configuration (doesn't affect deserialization)
+        XML_MAPPER.configure(ToXmlGenerator.Feature.WRITE_XML_DECLARATION, true);
+        XML_MAPPER.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        
+        // Harden against XXE (XML External Entity) attacks
+        XMLInputFactory xmlInputFactory = XML_MAPPER.getFactory().getXMLInputFactory();
+        xmlInputFactory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
+        xmlInputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
+        xmlInputFactory.setProperty("javax.xml.stream.isSupportingExternalEntities", Boolean.FALSE);
+        XML_MAPPER.getFactory().setXMLInputFactory(xmlInputFactory);
     }
-    
-    public final static String MAJOR_SUCCESS = POXConstants.MAJOR_SUCCESS;
-    public final static String MAJOR_FAILURE = POXConstants.MAJOR_FAILURE;
-    public final static String MAJOR_UNSUPPORTED = POXConstants.MAJOR_UNSUPPORTED;
-    public final static String MAJOR_PROCESSING = POXConstants.MAJOR_PROCESSING;
-    
-    public final static String SEVERITY_ERROR = POXConstants.SEVERITY_ERROR;
-    public final static String SEVERITY_WARNING = POXConstants.SEVERITY_WARNING;
-    public final static String SEVERITY_STATUS = POXConstants.SEVERITY_STATUS;
-    
-    public final static String MINOR_FULLSUCCESS = POXConstants.MINOR_FULLSUCCESS;
-    public final static String MINOR_NOSOURCEDIDS = POXConstants.MINOR_NOSOURCEDIDS;
-    public final static String MINOR_IDALLOC = POXConstants.MINOR_IDALLOC;
-    public final static String MINOR_OVERFLOWFAIL = POXConstants.MINOR_OVERFLOWFAIL;
-    public final static String MINOR_IDALLOCINUSEFAIL = POXConstants.MINOR_IDALLOCINUSEFAIL;
-    public final static String MINOR_INVALIDDATAFAIL = POXConstants.MINOR_INVALIDDATAFAIL;
-    public final static String MINOR_INCOMPLETEDATA = POXConstants.MINOR_INCOMPLETEDATA;
-    public final static String MINOR_PARTIALSTORAGE = POXConstants.MINOR_PARTIALSTORAGE;
-    public final static String MINOR_UNKNOWNOBJECT = POXConstants.MINOR_UNKNOWNOBJECT;
-    public final static String MINOR_DELETEFAILURE = POXConstants.MINOR_DELETEFAILURE;
-    public final static String MINOR_TARGETREADFAILURE = POXConstants.MINOR_TARGETREADFAILURE;
-    public final static String MINOR_SAVEPOINTERROR = POXConstants.MINOR_SAVEPOINTERROR;
-    public final static String MINOR_SAVEPOINTSYNCERROR = POXConstants.MINOR_SAVEPOINTSYNCERROR;
-    public final static String MINOR_UNKNOWNQUERY = POXConstants.MINOR_UNKNOWNQUERY;
-    public final static String MINOR_UNKNOWNVOCAB = POXConstants.MINOR_UNKNOWNVOCAB;
-    public final static String MINOR_TARGETISBUSY = POXConstants.MINOR_TARGETISBUSY;
-    public final static String MINOR_UNKNOWNEXTENSION = POXConstants.MINOR_UNKNOWNEXTENSION;
-    public final static String MINOR_UNAUTHORIZEDREQUEST = POXConstants.MINOR_UNAUTHORIZEDREQUEST;
-    public final static String MINOR_LINKFAILURE = POXConstants.MINOR_LINKFAILURE;
-    public final static String MINOR_UNSUPPORTED = POXConstants.MINOR_UNSUPPORTED;
 
     /**
      * Parse a POX request from XML string
@@ -100,6 +90,12 @@ public class POXJacksonParser {
 
         try {
             POXEnvelopeResponse response = XML_MAPPER.readValue(xmlString.trim(), POXEnvelopeResponse.class);
+            
+            if (response != null && response.getPoxHeader() == null && response.getPoxBody() == null) {
+                log.warn("Parsed response but both header and body are null - likely invalid XML");
+                return null;
+            }
+            
             log.debug("Successfully parsed POX response");
             return response;
 
@@ -127,8 +123,6 @@ public class POXJacksonParser {
             return POXConstants.OPERATION_READ_RESULT;
         } else if (body.getDeleteResultRequest() != null) {
             return POXConstants.OPERATION_DELETE_RESULT;
-        } else if (body.getReadMembershipRequest() != null) {
-            return POXConstants.OPERATION_READ_MEMBERSHIP;
         }
         
         return null;
@@ -175,7 +169,7 @@ public class POXJacksonParser {
 
     /**
      * Get sourcedId from the POX body.
-     * Works with replaceResultRequest, readResultRequest, deleteResultRequest, and readMembershipRequest.
+     * Works with replaceResultRequest, readResultRequest, and deleteResultRequest.
      * 
      * @param request The parsed POX request
      * @return The sourcedId string, or null if not found
@@ -190,10 +184,6 @@ public class POXJacksonParser {
         
         if (resultRecord != null && resultRecord.getSourcedGUID() != null) {
             return resultRecord.getSourcedGUID().getSourcedId();
-        }
-        
-        if (body.getReadMembershipRequest() != null) {
-            return body.getReadMembershipRequest().getSourcedId();
         }
         
         return null;
@@ -324,7 +314,6 @@ public class POXJacksonParser {
             if (body.getReplaceResultRequest() != null) operationCount++;
             if (body.getReadResultRequest() != null) operationCount++;
             if (body.getDeleteResultRequest() != null) operationCount++;
-            if (body.getReadMembershipRequest() != null) operationCount++;
             
             if (operationCount == 0) {
                 result.addError("No valid operation found in body");
@@ -377,9 +366,6 @@ public class POXJacksonParser {
                 body.getDeleteResultRequest().getResultRecord().getSourcedGUID() != null) {
                 info.setSourcedId(body.getDeleteResultRequest().getResultRecord().getSourcedGUID().getSourcedId());
             }
-        } else if (body.getReadMembershipRequest() != null) {
-            info.setOperationType(POXConstants.OPERATION_READ_MEMBERSHIP);
-            info.setSourcedId(body.getReadMembershipRequest().getSourcedId());
         }
         
         return info;

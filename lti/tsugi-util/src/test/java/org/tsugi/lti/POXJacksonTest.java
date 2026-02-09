@@ -36,21 +36,6 @@ public class POXJacksonTest {
             "</imsx_POXBody>\n" +
             "</imsx_POXEnvelopeRequest>";
 
-    private static final String SAMPLE_MEMBERSHIP_REQUEST_XML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-            "<imsx_POXEnvelopeRequest xmlns=\"http://www.imsglobal.org/services/ltiv1p1/xsd/imsoms_v1p0\">\n" +
-            "<imsx_POXHeader>\n" +
-            "<imsx_POXRequestHeaderInfo>\n" +
-            "<imsx_version>V1.0</imsx_version>\n" +
-            "<imsx_messageIdentifier>999999124</imsx_messageIdentifier>\n" +
-            "</imsx_POXRequestHeaderInfo>\n" +
-            "</imsx_POXHeader>\n" +
-            "<imsx_POXBody>\n" +
-            "<readMembershipRequest>\n" +
-            "<sourcedId>123course456</sourcedId>\n" +
-            "</readMembershipRequest>\n" +
-            "</imsx_POXBody>\n" +
-            "</imsx_POXEnvelopeRequest>";
-
     private static final String SAMPLE_RESPONSE_XML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
             "<imsx_POXEnvelopeResponse xmlns=\"http://www.imsglobal.org/services/ltiv1p1/xsd/imsoms_v1p0\">\n" +
             "<imsx_POXHeader>\n" +
@@ -107,18 +92,6 @@ public class POXJacksonTest {
         ResultScore score = record.getResult().getResultScore();
         assertEquals("en-us", score.getLanguage());
         assertEquals("A", score.getTextString());
-    }
-
-    @Test
-    public void testParseRequest_ReadMembershipOperation() {
-        POXEnvelopeRequest request = POXJacksonParser.parseRequest(SAMPLE_MEMBERSHIP_REQUEST_XML);
-        
-        assertNotNull("Request should not be null", request);
-        assertEquals("readMembershipRequest", POXJacksonParser.getOperation(request));
-        
-        POXRequestBody body = request.getPoxBody();
-        assertNotNull("Read membership request should not be null", body.getReadMembershipRequest());
-        assertEquals("123course456", body.getReadMembershipRequest().getSourcedId());
     }
 
     @Test
@@ -189,16 +162,6 @@ public class POXJacksonTest {
         assertEquals("en-us", language);
         assertNotNull("TextString should not be null", textString);
         assertEquals("A", textString);
-    }
-
-    @Test
-    public void testGetBodyInfo_ReadMembership() {
-        POXEnvelopeRequest request = POXJacksonParser.parseRequest(SAMPLE_MEMBERSHIP_REQUEST_XML);
-        
-        String sourcedId = POXJacksonParser.getBodySourcedId(request);
-        
-        assertNotNull("SourcedId should not be null", sourcedId);
-        assertEquals("123course456", sourcedId);
     }
 
     @Test
@@ -311,9 +274,32 @@ public class POXJacksonTest {
         assertTrue("Response should contain description element", response.contains("imsx_description"));
         // Verify special characters are escaped in the XML (check for escaped forms)
         assertTrue("Response should contain escaped ampersand", response.contains("&amp;"));
-        // Less-than and greater-than must be escaped - check for escaped forms or verify XML is valid
-        assertTrue("Response should be valid XML with escaped characters", 
-            response.contains("&lt;") || response.contains("&gt;") || response.contains("special"));
+        // Extract description content to check for XML escaping of < and >
+        int start = response.indexOf("<imsx_description>");
+        int end = response.indexOf("</imsx_description>");
+        assertTrue(start >= 0 && end > start);
+        
+        String serializedDesc = response.substring(start, end);
+        
+        // Must escape '<' in text content
+        assertTrue("Expected '&lt;' in serialized description", serializedDesc.contains("&lt;"));
+        
+        // Verify raw unescaped markup does NOT appear
+        assertFalse("Raw '<special>' must not appear in serialized description", 
+                serializedDesc.contains("<special>"));
+        assertFalse("Raw unescaped description must not appear", 
+                serializedDesc.contains("Test with <special> & \"characters\""));
+        
+        // Verify escaped forms ARE present
+        // Jackson escapes '<' to '&lt;' but may not escape '>' in text content
+        assertTrue("Expected '&lt;special' in serialized description", 
+                serializedDesc.contains("&lt;special"));
+        assertTrue("Expected '&amp;' in serialized description", 
+                serializedDesc.contains("&amp;"));
+        // Quotes don't need to be escaped in XML element text content (only in attributes)
+        // Verify quotes appear as literal quotes (not escaped)
+        assertTrue("Expected literal quotes in serialized description", 
+                serializedDesc.contains("\""));
     }
 
     @Test

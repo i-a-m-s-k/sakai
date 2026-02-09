@@ -14,10 +14,9 @@ import org.tsugi.lti.objects.POXCodeMinorField;
 import org.tsugi.lti.objects.ReadResultResponse;
 import org.tsugi.lti.objects.ReplaceResultResponse;
 import org.tsugi.lti.objects.DeleteResultResponse;
+import org.tsugi.lti.POXJacksonParser;
 
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
-import com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator;
-import com.fasterxml.jackson.databind.SerializationFeature;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,19 +25,15 @@ import java.util.ArrayList;
 @Slf4j
 public class POXResponseBuilder {
     
-    private static final XmlMapper XML_MAPPER;
-    
-    static {
-        XML_MAPPER = new XmlMapper();
-        XML_MAPPER.configure(ToXmlGenerator.Feature.WRITE_XML_DECLARATION, true);
-        XML_MAPPER.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
-        XML_MAPPER.setDefaultUseWrapper(false);
-    }
+    // Reuse the shared thread-safe XmlMapper from POXJacksonParser
+    // It's configured for both serialization and deserialization with XXE protection
+    private static final XmlMapper XML_MAPPER = POXJacksonParser.XML_MAPPER;
     
     private String description;
-    private String major = POXRequestHandler.MAJOR_FAILURE;
-    private String severity = POXRequestHandler.SEVERITY_ERROR;
+    private String major = POXConstants.MAJOR_FAILURE;
+    private String severity = POXConstants.SEVERITY_ERROR;
     private String messageId;
+    private String messageRefIdentifier;
     private String operation;
     private POXCodeMinor codeMinor;
     private String bodyXml;
@@ -67,6 +62,18 @@ public class POXResponseBuilder {
    
     public POXResponseBuilder withMessageId(String messageId) {
         this.messageId = messageId;
+        return this;
+    }
+    
+    /**
+     * Set the message reference identifier (references the original request message ID).
+     * If not set, falls back to using the response messageId.
+     * 
+     * @param messageRefIdentifier The message reference identifier from the original request
+     * @return this builder for method chaining
+     */
+    public POXResponseBuilder withMessageRefIdentifier(String messageRefIdentifier) {
+        this.messageRefIdentifier = messageRefIdentifier;
         return this;
     }
     
@@ -108,26 +115,26 @@ public class POXResponseBuilder {
     }
     
     public POXResponseBuilder asSuccess() {
-        this.major = POXRequestHandler.MAJOR_SUCCESS;
-        this.severity = POXRequestHandler.SEVERITY_STATUS;
+        this.major = POXConstants.MAJOR_SUCCESS;
+        this.severity = POXConstants.SEVERITY_STATUS;
         return this;
     }
     
     public POXResponseBuilder asFailure() {
-        this.major = POXRequestHandler.MAJOR_FAILURE;
-        this.severity = POXRequestHandler.SEVERITY_ERROR;
+        this.major = POXConstants.MAJOR_FAILURE;
+        this.severity = POXConstants.SEVERITY_ERROR;
         return this;
     }
     
     public POXResponseBuilder asUnsupported() {
-        this.major = POXRequestHandler.MAJOR_UNSUPPORTED;
-        this.severity = POXRequestHandler.SEVERITY_ERROR;
+        this.major = POXConstants.MAJOR_UNSUPPORTED;
+        this.severity = POXConstants.SEVERITY_ERROR;
         return this;
     }
     
     public POXResponseBuilder asProcessing() {
-        this.major = POXRequestHandler.MAJOR_PROCESSING;
-        this.severity = POXRequestHandler.SEVERITY_STATUS;
+        this.major = POXConstants.MAJOR_PROCESSING;
+        this.severity = POXConstants.SEVERITY_STATUS;
         return this;
     }
     
@@ -171,7 +178,8 @@ public class POXResponseBuilder {
         statusInfo.setCodeMajor(major);
         statusInfo.setSeverity(severity);
         statusInfo.setDescription(description);
-        statusInfo.setMessageRefIdentifier(messageId);
+        // Use messageRefIdentifier if provided (references original request), otherwise fall back to messageId
+        statusInfo.setMessageRefIdentifier(messageRefIdentifier != null ? messageRefIdentifier : messageId);
         statusInfo.setOperationRefIdentifier(operation);
         statusInfo.setCodeMinor(codeMinor);
         
@@ -193,30 +201,23 @@ public class POXResponseBuilder {
                 log.warn("Unknown body object type: {}", bodyObject.getClass().getName());
             }
         } else if (bodyXml != null && !bodyXml.trim().isEmpty()) {
-            // Fallback: Parse body XML if provided (for backward compatibility)
+            // Parse body XML if provided - always try to parse based on XML content regardless of operation
+            // This allows bodyXml to be included even when operation doesn't match known types
             try {
-                // Determine which response type based on operation
-                if ("readResultRequest".equals(operation)) {
-                    ReadResultResponse readResponse = XML_MAPPER.readValue(bodyXml.trim(), ReadResultResponse.class);
+                String trimmedBodyXml = bodyXml.trim();
+                // Parse based on XML content (preferred - more reliable)
+                // Only parse if XML contains the expected root element to avoid creating empty objects
+                if (trimmedBodyXml.contains("<readResultResponse")) {
+                    ReadResultResponse readResponse = XML_MAPPER.readValue(trimmedBodyXml, ReadResultResponse.class);
                     body.setReadResultResponse(readResponse);
-                } else if ("replaceResultRequest".equals(operation)) {
-                    ReplaceResultResponse replaceResponse = XML_MAPPER.readValue(bodyXml.trim(), ReplaceResultResponse.class);
+                } else if (trimmedBodyXml.contains("<replaceResultResponse")) {
+                    ReplaceResultResponse replaceResponse = XML_MAPPER.readValue(trimmedBodyXml, ReplaceResultResponse.class);
                     body.setReplaceResultResponse(replaceResponse);
-                } else if ("deleteResultRequest".equals(operation)) {
-                    DeleteResultResponse deleteResponse = XML_MAPPER.readValue(bodyXml.trim(), DeleteResultResponse.class);
+                } else if (trimmedBodyXml.contains("<deleteResultResponse")) {
+                    DeleteResultResponse deleteResponse = XML_MAPPER.readValue(trimmedBodyXml, DeleteResultResponse.class);
                     body.setDeleteResultResponse(deleteResponse);
                 } else {
-                    // Try to parse generically - check for known response types
-                    if (bodyXml.contains("<readResultResponse")) {
-                        ReadResultResponse readResponse = XML_MAPPER.readValue(bodyXml.trim(), ReadResultResponse.class);
-                        body.setReadResultResponse(readResponse);
-                    } else if (bodyXml.contains("<replaceResultResponse")) {
-                        ReplaceResultResponse replaceResponse = XML_MAPPER.readValue(bodyXml.trim(), ReplaceResultResponse.class);
-                        body.setReplaceResultResponse(replaceResponse);
-                    } else if (bodyXml.contains("<deleteResultResponse")) {
-                        DeleteResultResponse deleteResponse = XML_MAPPER.readValue(bodyXml.trim(), DeleteResultResponse.class);
-                        body.setDeleteResultResponse(deleteResponse);
-                    }
+                    log.debug("Body XML provided but doesn't match known response types. Body will be empty.");
                 }
             } catch (Exception e) {
                 log.warn("Failed to parse body XML, using empty body: {}", e.getMessage());
