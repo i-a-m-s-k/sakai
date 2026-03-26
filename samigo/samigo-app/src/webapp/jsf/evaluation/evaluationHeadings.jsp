@@ -84,5 +84,6 @@ $Id: evaluationHeadings.jsp 6643 2006-03-13 19:38:07Z hquinn@stanford.edu $
                 </span>
             </li>
         </h:panelGroup>
+        <%@ include file="/jsf/author/permissionsNav.jsp" %>
     </ul>
 </h:panelGroup>

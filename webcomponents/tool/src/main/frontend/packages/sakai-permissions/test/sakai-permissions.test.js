@@ -6,10 +6,11 @@ import * as sinon from "sinon";
 import fetchMock from "fetch-mock";
 describe("sakai-permissions tests", () => {
 
-  window.top.portal = { siteId: data.siteId };
+  window.top.portal = { siteId: data.siteId, locale: "en_GB" };
 
   beforeEach(async () => {
     fetchMock.mockGlobal();
+    window.sessionStorage.clear();
 
 
     fetchMock
@@ -120,6 +121,45 @@ describe("sakai-permissions tests", () => {
     expect(el.querySelectorAll("#permissions-container input:checked").length).to.equal(0);
   });
 
+  it ("reloads tool translations when an empty bundle was cached", async () => {
+
+    window.sessionStorage.setItem("en_GBtool", JSON.stringify({}));
+
+    fetchMock.get(`/api/sites/${data.siteId}/permissions/tool?ref=${encodeURIComponent(`/site/${data.siteId}`)}`, data.perms);
+
+    const el = await fixture(html`
+      <sakai-permissions tool="tool">
+      </sakai-permissions>
+    `);
+
+    await waitUntil(() => {
+      const button = el.querySelector("button[data-perm='tool.create']");
+      return button?.textContent?.includes("Create");
+    });
+
+    expect(el.querySelector("button[data-perm='tool.create']").textContent).to.contain("Create");
+  });
+
+  it ("excludes configured permissions from the rendered list", async () => {
+
+    fetchMock.get(`/api/sites/${data.siteId}/permissions/tool?ref=${encodeURIComponent(`/site/${data.siteId}`)}`, data.perms);
+
+    const el = await fixture(html`
+      <sakai-permissions tool="tool"
+          exclude-permissions="tool.create, tool.delete">
+      </sakai-permissions>
+    `);
+
+    await waitUntil(() => el._i18n);
+    await waitUntil(() => el.roles);
+    await elementUpdated(el);
+
+    expect(el.available).to.deep.equal([ "tool.read" ]);
+    expect(el.querySelector("button[data-perm='tool.read']")).to.exist;
+    expect(el.querySelector("button[data-perm='tool.create']")).to.not.exist;
+    expect(el.querySelector("button[data-perm='tool.delete']")).to.not.exist;
+  });
+
   it ("displays an error banner if the override ref is invalid", async () => {
 
     const ref = "main_ref";
@@ -223,6 +263,37 @@ describe("sakai-permissions tests", () => {
     expect(params.get("access:tool.read")).to.equal("true");
     expect(params.get("access:tool.create")).to.equal("false");
     expect(params.get("access:tool.delete")).to.equal("false");
+  });
+
+  it ("displays an error banner when saving permissions fails", async () => {
+
+    const unsetPerms = { ...data.perms, on: { "maintain": [], "access": [] } };
+
+    fetchMock.get(`/api/sites/${data.siteId}/permissions/tool?ref=${encodeURIComponent(`/site/${data.siteId}`)}`, unsetPerms);
+    fetchMock.post(`/api/sites/${data.siteId}/permissions`, {
+      status: 403,
+      body: "The function tool.create cannot be updated by the current user",
+    });
+
+    const consoleErrorStub = sinon.stub(console, "error");
+
+    const el = await fixture(html`
+      <sakai-permissions tool="tool">
+      </sakai-permissions>
+    `);
+
+    await waitUntil(() => el._i18n);
+    await waitUntil(() => el.roles);
+    await elementUpdated(el);
+
+    el.querySelector("input[data-perm='tool.create'][data-role='maintain']").checked = true;
+    el.querySelector(".act input[type='button'].active").click();
+
+    await waitUntil(() => !!el.querySelector(".sak-banner-error"));
+
+    expect(el.querySelector(".sak-banner-error").textContent).to.contain("The function tool.create cannot be updated by the current user");
+
+    consoleErrorStub.restore();
   });
 
   it ("loads group permissions correctly", async () => {

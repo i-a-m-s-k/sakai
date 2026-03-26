@@ -117,6 +117,7 @@
             </h:commandLink>
         </h:panelGroup>
     </li>
+    <%@ include file="/jsf/author/permissionsNav.jsp" %>
     <h:panelGroup rendered="#{authorization.adminAssessment eq true}">
         <li role="menuitem">
             <h:panelGroup styleClass="menuitem">

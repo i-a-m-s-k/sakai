@@ -116,6 +116,7 @@ function displayEMIHelp(){
             </h:commandLink>
         </span>
     </li>
+    <%@ include file="/jsf/author/permissionsNav.jsp" %>
 </ul>
 
 <br/>

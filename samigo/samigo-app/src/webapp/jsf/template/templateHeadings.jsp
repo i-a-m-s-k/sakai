@@ -72,6 +72,7 @@
                 </h:commandLink>
             </span>
         </li> 
+        <%@ include file="/jsf/author/permissionsNav.jsp" %>
         <h:panelGroup rendered="#{authorization.adminAssessment}">
             <li role="menuitem">
                 <span>

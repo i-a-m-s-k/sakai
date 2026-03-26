@@ -83,6 +83,7 @@
                 </span>
             </li> 
         </h:panelGroup>
+        <%@ include file="/jsf/author/permissionsNav.jsp" %>
         <h:panelGroup rendered="#{authorization.adminAssessment}">
             <li role="menuitem">
                 <span> 

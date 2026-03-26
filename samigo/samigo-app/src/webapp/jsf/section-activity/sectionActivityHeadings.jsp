@@ -58,6 +58,7 @@
                 <h:outputText value="#{generalMessages.section_activity}" />
             </span>
         </li>
+        <%@ include file="/jsf/author/permissionsNav.jsp" %>
         <h:panelGroup rendered="#{authorization.adminAssessment}">
             <li role="menuitem">
                 <span>

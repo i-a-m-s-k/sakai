@@ -317,6 +317,25 @@ class SamigoTest extends SakaiUiTestBase {
         assertThat(page.locator("#editform\\:questionpool-questions a[title=\"Edit Question\"]")).hasCount(1);
     }
 
+    @Test
+    @Order(8)
+    void canOpenSamigoPermissions() {
+        String courseUrl = ensureCourseUrl();
+
+        sakai.login("instructor1");
+        page.navigate(courseUrl);
+        sakai.toolClick("Tests");
+
+        clickFirstVisible(page.locator("#authorIndexForm").locator("a[id$='permissionsLink'], a:has-text(\"Permissions\")"));
+
+        Locator permissions = page.locator("#samigo-permissions");
+        assertThat(permissions).isVisible(new LocatorAssertions.IsVisibleOptions().setTimeout(20_000));
+        assertThat(page.locator(".samigo-container h1")).containsText(Pattern.compile("Permissions", Pattern.CASE_INSENSITIVE));
+        assertThat(permissions.locator(".permission-row").first()).isVisible(new LocatorAssertions.IsVisibleOptions().setTimeout(20_000));
+        assertThat(permissions).containsText(Pattern.compile("Create assessments", Pattern.CASE_INSENSITIVE));
+        assertThat(permissions.locator("button[data-perm^='assessment.template.']")).hasCount(0);
+    }
+
     private void addMultipleChoiceQuestion(String points, String questionText, List<String> choices, int correctIndex) {
         selectQuestionType(Pattern.compile("multiple\\s*choice", Pattern.CASE_INSENSITIVE));
         page.locator("#itemForm\\:answerptr").fill(points);
